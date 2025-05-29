@@ -1,117 +1,86 @@
-# **10.1P:Cloud Native Monitoring & Visibility**
+# **Monitoring App Deployment on GKE 10.1P**
 
 ## **Project Overview**
-This project demonstrates the deployment of a **Node.js + MongoDB** cloud-native application on **Google Kubernetes Engine (GKE)** with monitoring using **GCP Stackdriver**.  
+This project demonstrates the deployment of a Node.js monitoring application with MongoDB on Google Kubernetes Engine (GKE). The setup includes:
+- Containerized Node.js application
+- MongoDB with persistent storage
+- Kubernetes deployment manifests
+- CronJob for database backups
 
-### **Key Features**
-✅ **Containerized Node.js App** (Docker + Kubernetes)  
-✅ **MongoDB StatefulSet** with Persistent Storage  
-✅ **GKE Cluster** with Auto-Scaling & Load Balancing  
-✅ **Stackdriver Logging & Monitoring**  
-✅ **Health Checks (Liveness/Readiness Probes)**  
-
----
+## **Project Structure**
+```
+SIT737-2025-T1-PRAC10/
+│   ├── db-backup-cronjob.yaml    # Database backup job
+│   ├── db-pv.yaml                # Persistent Volume
+│   ├── db-pvc.yaml               # Persistent Volume Claim
+│   ├── db-secret.yaml            # MongoDB credentials
+│   ├── db-service.yaml           # MongoDB service
+│   ├── db-statefulset.yaml       # MongoDB deployment
+│   ├── deployment.yaml           # App deployment
+│   |── service.yaml              # App service
+├   |── index.js                  # Application entry point
+│   ├── package.json              # Node.js dependencies
+│   └── package-lock.json
+|   |── Dockerfile                # Container configuration
+└── README.md                     # This file
+```
 
 ## **Prerequisites**
-1. **Google Cloud Account** with billing enabled.
-2. **Tools Installed**:
-   - `gcloud` CLI ([Install Guide](https://cloud.google.com/sdk/docs/install))
-   - `kubectl` ([Install Guide](https://kubernetes.io/docs/tasks/tools/))
-   - `docker` ([Install Guide](https://docs.docker.com/get-docker/))
-   - `node.js` (v16+)
-   - VS Code (Recommended)
+- Google Cloud account with billing enabled
+- Google Cloud SDK (`gcloud`) installed
+- Docker installed
+- `kubectl` configured for GKE
 
----
+## **Deployment Steps**
 
-## **Setup Instructions**
-### **1. Clone the Repository**
+### **1. Build and Push Docker Image**
 ```bash
-git clone <your-repo-url>
-cd sit737-10.1P
+docker build -t gcr.io/sit737-10-p-monitoring/monitoring-app .
+docker push gcr.io/sit737-10-p-monitoring/monitoring-app
 ```
 
-### **2. Build & Push Docker Image**
+### **2. Deploy MongoDB**
 ```bash
-docker build -t gcr.io/YOUR-PROJECT-ID/monitoring-app .
-docker push gcr.io/YOUR-PROJECT-ID/monitoring-app
+kubectl apply -f db-secret.yaml
+kubectl apply -f db-pv.yaml
+kubectl apply -f db-pvc.yaml
+kubectl apply -f db-statefulset.yaml
+kubectl apply -f db-service.yaml
 ```
 
-### **3. Deploy to GKE**
+### **3. Deploy Monitoring App**
 ```bash
-# Create GKE cluster
-gcloud container clusters create monitoring-cluster \
-  --zone australia-southeast1-a \
-  --num-nodes=2 \
-  --machine-type=e2-medium \
-  --logging=SYSTEM \
-  --monitoring=SYSTEM
-
-# Apply Kubernetes manifests
-kubectl apply -f k8s/mongo-secret.yaml
-kubectl apply -f k8s/mongo-pv-pvc.yaml
-kubectl apply -f k8s/mongo-statefulset.yaml
-kubectl apply -f k8s/app-deployment.yaml
-kubectl apply -f k8s/app-service.yaml
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
 ```
 
-### **4. Verify Deployment**
+### **4. Set Up Database Backups (Optional)**
 ```bash
-# Check running pods
-kubectl get pods -o wide
+kubectl apply -f db-backup-cronjob.yaml
+```
 
-# Get LoadBalancer IP
+## **Verification**
+Check deployment status:
+```bash
+kubectl get pods
+kubectl get services
+```
+
+## **Accessing the Application**
+Get the external IP:
+```bash
 kubectl get service monitoring-app-service
-
-# Test the app
-curl http://<EXTERNAL_IP>
-curl http://<EXTERNAL_IP>/health
 ```
+Access the app at: `http://<EXTERNAL_IP>`
 
----
-
-## **Monitoring & Logging**
-### **1. View Logs**
-```bash
-# Application logs
-kubectl logs -l app=monitoring-app --tail=20
-
-# MongoDB logs
-kubectl logs mongo-0
-```
-
-### **2. Access Stackdriver**
-- Open [GCP Logging Console](https://console.cloud.google.com/logs)  
-- Filter by:  
-  `resource.type="k8s_container"`  
-  `resource.labels.cluster_name="monitoring-cluster"`  
-
-### **3. Check Metrics**
-- Navigate to:  
-  **GCP Console > Monitoring > Dashboards**  
-
----
-
-## **MongoDB Operations**
-### **1. Connect to MongoDB**
-```bash
-kubectl exec -it mongo-0 -- mongosh --username Nouman --password Pakistan123 --authenticationDatabase admin
-```
-
-### **2. Run Queries**
-```javascript
-use sit323db
-db.items.insertOne({name: "test", value: 123})
-db.items.find()
-db.stats()
-```
-
----
+## **Monitoring and Maintenance**
+- View logs: `kubectl logs <pod-name>`
+- Check cron jobs: `kubectl get cronjobs`
+- Monitor in GCP Console > Kubernetes Engine > Workloads
 
 ## **Troubleshooting**
-| **Issue** | **Solution** |
-|-----------|-------------|
-| `PVC stuck in "Pending"` | Check `kubectl describe pvc mongo-pvc` |
-| `ImagePullBackOff` | Verify `docker push` and GCR permissions |
-| `MongoDB connection failed` | Check secrets (`kubectl describe secret mongo-secret`) |
-
----
+| Issue | Solution |
+|-------|----------|
+| Pods stuck in ContainerCreating | Check PVC/PV binding |
+| No external IP assigned | Wait 1-2 minutes |
+| MongoDB connection errors | Verify service name in app config |
